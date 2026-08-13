@@ -59,7 +59,7 @@ details summary{cursor:pointer;color:var(--muted);font-size:12px;font-weight:750
 </head>
 <body>
 <div class="wrap">
-<header><div><h1>台股當沖損益試算器</h1><div class="sub">台股紅賺綠賠 · 停損停利反推 · Google Sheet 跨裝置同步與績效分析。</div></div><div class="badge">V1.7.2</div></header>
+<header><div><h1>台股當沖損益試算器</h1><div class="sub">台股紅賺綠賠 · 停損停利反推 · Google Sheet 跨裝置同步與績效分析。</div></div><div class="badge">V1.7.4</div></header>
 
 <div class="tabs">
 <button class="tab active" data-page="calculator">損益試算</button>
@@ -308,8 +308,73 @@ function saveRecords(records){
  const clean=Array.isArray(records)?records:[];
  localStorage.setItem("daytradeRecords",JSON.stringify(clean.slice(-500)));
 }
-function parseTradeDate(r){const raw=String(r.tradeDate||"");if(raw){const d=new Date(raw+"T12:00:00");if(!isNaN(d))return d}const d=new Date(r.savedAt||Date.now());return isNaN(d)?new Date():d}
-function filterRecords(all,f){const n=new Date(),t=new Date(n);t.setHours(0,0,0,0);const tm=new Date(t);tm.setDate(tm.getDate()+1);const w=new Date(t);w.setDate(w.getDate()-((w.getDay()+6)%7));const m=new Date(n.getFullYear(),n.getMonth(),1);return all.filter(r=>{const d=parseTradeDate(r);if(f==="today")return d>=t&&d<tm;if(f==="week")return d>=w;if(f==="month")return d>=m;return true})}
+function canonicalTradeDate(value){
+ const raw=String(value||"").trim();
+ if(!raw)return "";
+
+ // If the value is already YYYY-MM-DD, preserve the user's actual transaction date exactly.
+ if(/^\d{4}-\d{2}-\d{2}$/.test(raw))return raw;
+
+ // Google Sheets may serialize a date as an ISO timestamp in UTC.
+ // Convert that timestamp back to Asia/Taipei calendar date.
+ const d=new Date(raw);
+ if(isNaN(d))return "";
+
+ return new Intl.DateTimeFormat("en-CA",{
+   timeZone:"Asia/Taipei",
+   year:"numeric",
+   month:"2-digit",
+   day:"2-digit"
+ }).format(d);
+}
+
+function todayTaipei(){
+ return new Intl.DateTimeFormat("en-CA",{
+   timeZone:"Asia/Taipei",
+   year:"numeric",
+   month:"2-digit",
+   day:"2-digit"
+ }).format(new Date());
+}
+
+function dateStringToLocalNoon(s){
+ if(!/^\d{4}-\d{2}-\d{2}$/.test(s))return null;
+ const [y,m,d]=s.split("-").map(Number);
+ return new Date(y,m-1,d,12,0,0);
+}
+
+function parseTradeDate(r){
+ // IMPORTANT: performance filters are based ONLY on the actual trade date.
+ // savedAt is intentionally not used as a fallback for period statistics.
+ const s=canonicalTradeDate(r.tradeDate);
+ return dateStringToLocalNoon(s);
+}
+
+function filterRecords(all,f){
+ if(f==="all")return all;
+
+ const todayStr=todayTaipei();
+ const today=dateStringToLocalNoon(todayStr);
+ if(!today)return [];
+
+ const tomorrow=new Date(today);
+ tomorrow.setDate(tomorrow.getDate()+1);
+
+ const weekStart=new Date(today);
+ weekStart.setDate(weekStart.getDate()-((weekStart.getDay()+6)%7));
+
+ const monthStart=new Date(today.getFullYear(),today.getMonth(),1,12,0,0);
+
+ return all.filter(r=>{
+   const d=parseTradeDate(r);
+   if(!d)return false;
+   if(f==="today")return d>=today&&d<tomorrow;
+   if(f==="week")return d>=weekStart&&d<tomorrow;
+   if(f==="month")return d>=monthStart&&d<tomorrow;
+   return true;
+ });
+}
+
 function stats(rs){const p=rs.map(r=>Number(r.net||0)),w=p.filter(x=>x>0),l=p.filter(x=>x<0),sum=p.reduce((a,b)=>a+b,0);return{n:rs.length,sum,winRate:rs.length?w.length/rs.length*100:0,avg:rs.length?sum/rs.length:0,avgWin:w.length?w.reduce((a,b)=>a+b,0)/w.length:0,avgLoss:l.length?l.reduce((a,b)=>a+b,0)/l.length:0,maxWin:w.length?Math.max(...w):0,maxLoss:l.length?Math.min(...l):0}}
 let activeFilter="all";
 function renderHistory(){
@@ -321,7 +386,7 @@ function renderHistory(){
  setText("maxLossStat",s.maxLoss?money(s.maxLoss):"—","v loss");setText("monthPnL",month.n?money(month.sum):"—","mv "+cls(month.sum));
  if($("recordCountLabel"))$("recordCountLabel").textContent=`顯示 ${view.length} / ${all.length} 筆`;
  if(!view.length){$("history").innerHTML='<div class="hint">這個期間目前沒有交易紀錄。</div>';return}
- $("history").innerHTML=view.slice().sort((a,b)=>parseTradeDate(b)-parseTradeDate(a)).map(x=>`<div class="historyItem"><div class="historyTop"><div><div class="historyName">${escapeHtml(x.symbol||"未命名交易")}</div><div class="historyMeta">${escapeHtml(x.tradeDate||x.savedAt)} · 買 ${nf.format(Number(x.buy))} → 賣 ${nf.format(Number(x.sell))} · ${ni.format(Number(x.shares))} 股</div></div><div><div class="historyPnL ${cls(Number(x.net))}">${money(Number(x.net))}</div><div class="historyMeta" style="text-align:right">${pct(Number(x.returnRate||0))}</div></div></div>${x.notes?`<div class="historyMeta" style="margin-top:9px">📝 ${escapeHtml(x.notes)}</div>`:""}<div class="historyBtns"><button class="mini" onclick="loadRecord('${x.id}')">載入</button><button class="mini danger" onclick="deleteRecord('${x.id}')">刪除</button></div></div>`).join("");
+ $("history").innerHTML=view.slice().sort((a,b)=>parseTradeDate(b)-parseTradeDate(a)).map(x=>`<div class="historyItem"><div class="historyTop"><div><div class="historyName">${escapeHtml(x.symbol||"未命名交易")}</div><div class="historyMeta">${escapeHtml(canonicalTradeDate(x.tradeDate)||"未填交易日期")} · 買 ${nf.format(Number(x.buy))} → 賣 ${nf.format(Number(x.sell))} · ${ni.format(Number(x.shares))} 股</div></div><div><div class="historyPnL ${cls(Number(x.net))}">${money(Number(x.net))}</div><div class="historyMeta" style="text-align:right">${pct(Number(x.returnRate||0))}</div></div></div>${x.notes?`<div class="historyMeta" style="margin-top:9px">📝 ${escapeHtml(x.notes)}</div>`:""}<div class="historyBtns"><button class="mini" onclick="loadRecord('${x.id}')">載入</button><button class="mini danger" onclick="deleteRecord('${x.id}')">刪除</button></div></div>`).join("");
 }
 function escapeHtml(s){return String(s).replace(/[&<>"']/g,m=>({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;","'":"&#039;"}[m]))}
 
