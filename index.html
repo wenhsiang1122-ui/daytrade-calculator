@@ -59,7 +59,7 @@ details summary{cursor:pointer;color:var(--muted);font-size:12px;font-weight:750
 </head>
 <body>
 <div class="wrap">
-<header><div><h1>台股當沖損益試算器</h1><div class="sub">台股紅賺綠賠 · 停損停利反推 · Google Sheet 跨裝置同步與績效分析。</div></div><div class="badge">V1.7</div></header>
+<header><div><h1>台股當沖損益試算器</h1><div class="sub">台股紅賺綠賠 · 停損停利反推 · Google Sheet 跨裝置同步與績效分析。</div></div><div class="badge">V1.7.1</div></header>
 
 <div class="tabs">
 <button class="tab active" data-page="calculator">損益試算</button>
@@ -303,6 +303,10 @@ function recordData(){
 function getRecords(){
  try{return JSON.parse(localStorage.getItem("daytradeRecords")||"[]")}catch(e){return[]}
 }
+function saveRecords(records){
+ const clean=Array.isArray(records)?records:[];
+ localStorage.setItem("daytradeRecords",JSON.stringify(clean.slice(-500)));
+}
 function parseTradeDate(r){const raw=String(r.tradeDate||"");if(raw){const d=new Date(raw+"T12:00:00");if(!isNaN(d))return d}const d=new Date(r.savedAt||Date.now());return isNaN(d)?new Date():d}
 function filterRecords(all,f){const n=new Date(),t=new Date(n);t.setHours(0,0,0,0);const tm=new Date(t);tm.setDate(tm.getDate()+1);const w=new Date(t);w.setDate(w.getDate()-((w.getDay()+6)%7));const m=new Date(n.getFullYear(),n.getMonth(),1);return all.filter(r=>{const d=parseTradeDate(r);if(f==="today")return d>=t&&d<tm;if(f==="week")return d>=w;if(f==="month")return d>=m;return true})}
 function stats(rs){const p=rs.map(r=>Number(r.net||0)),w=p.filter(x=>x>0),l=p.filter(x=>x<0),sum=p.reduce((a,b)=>a+b,0);return{n:rs.length,sum,winRate:rs.length?w.length/rs.length*100:0,avg:rs.length?sum/rs.length:0,avgWin:w.length?w.reduce((a,b)=>a+b,0)/w.length:0,avgLoss:l.length?l.reduce((a,b)=>a+b,0)/l.length:0,maxWin:w.length?Math.max(...w):0,maxLoss:l.length?Math.min(...l):0}}
@@ -373,7 +377,7 @@ $("exportRecords").onclick=()=>{
 };
 $("saveSheetUrl").onclick=()=>{const u=$("sheetApiUrl").value.trim();localStorage.setItem("sheetApiUrl",u);$("sheetStatus").textContent=u?"✓ 已儲存 Google Sheet 同步網址":"已清除同步網址"};
 $("testSheet").onclick=async()=>{localStorage.setItem("sheetApiUrl",$("sheetApiUrl").value.trim());$("sheetStatus").textContent="測試連線中…";try{const r=await apiRequest("ping",{});$("sheetStatus").textContent=r.ok?"✓ 連線成功："+(r.message||"Google Sheet API 正常"):"連線失敗"}catch(e){$("sheetStatus").textContent="連線失敗："+e.message}};
-$("pullCloud").onclick=async()=>{$("cloudMsg").textContent="正在從 Google Sheet 載入…";try{const r=await cloudList();if(!r.ok)throw new Error(r.error||"讀取失敗");const cloud=Array.isArray(r.records)?r.records:[];localStorage.setItem("daytradeRecords",JSON.stringify(cloud));renderHistory();$("cloudMsg").textContent=`✓ 已從 Google Sheet 載入 ${cloud.length} 筆紀錄`;}catch(e){$("cloudMsg").textContent="載入失敗："+e.message}};
+
 $("pushAllCloud").onclick=async()=>{$("cloudMsg").textContent="正在備份本機紀錄…";try{const records=getRecords();const r=await apiRequest("upsertMany",{records});if(!r.ok)throw new Error(r.error||"備份失敗");$("cloudMsg").textContent=`✓ 已備份 ${records.length} 筆本機紀錄到 Google Sheet`;}catch(e){$("cloudMsg").textContent="備份失敗："+e.message}};
 $("saveSettings").onclick=()=>{
  const x={feeRate:val("feeRate"),discount:val("discount"),taxRate:val("taxRate"),minFee:val("minFee")};
