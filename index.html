@@ -37,7 +37,7 @@ textarea{font-size:13px;font-weight:500;min-height:74px;resize:vertical}
 input:focus,select:focus,textarea:focus{border-color:var(--accent);box-shadow:0 0 0 3px rgba(126,167,255,.1)}
 .unitbox{position:relative}.unitbox input{padding-right:44px}.unit{position:absolute;right:11px;top:37px;color:var(--muted);font-size:11px}
 .hero{padding:19px 17px}.heroLabel{font-size:11px;color:var(--muted)}.heroValue{font-size:39px;font-weight:900;letter-spacing:-1.4px;margin:3px 0 9px}
-.good{color:var(--good)}.bad{color:var(--bad)}.warn{color:var(--warn)}
+.good,.profit{color:var(--good)}.bad,.loss{color:var(--bad)}.warn{color:var(--warn)}
 .pills{display:flex;flex-wrap:wrap;gap:7px}.pill{font-size:11px;color:var(--muted);border:1px solid var(--line);border-radius:999px;padding:6px 8px;background:rgba(255,255,255,.02)}
 .metrics{display:grid;grid-template-columns:1fr 1fr;gap:1px;background:var(--line);border-radius:13px;overflow:hidden}
 .metric{background:var(--panel2);padding:13px}.mk{font-size:10px;color:var(--muted);margin-bottom:5px}.mv{font-size:16px;font-weight:820}
@@ -59,7 +59,7 @@ details summary{cursor:pointer;color:var(--muted);font-size:12px;font-weight:750
 </head>
 <body>
 <div class="wrap">
-<header><div><h1>台股當沖損益試算器</h1><div class="sub">台股紅賺綠賠 · 停損停利反推 · Google Sheet 跨裝置同步與績效分析。</div></div><div class="badge">V1.7.1</div></header>
+<header><div><h1>台股當沖損益試算器</h1><div class="sub">台股紅賺綠賠 · 停損停利反推 · Google Sheet 跨裝置同步與績效分析。</div></div><div class="badge">V1.7.2</div></header>
 
 <div class="tabs">
 <button class="tab active" data-page="calculator">損益試算</button>
@@ -189,6 +189,7 @@ const ni=new Intl.NumberFormat("zh-TW",{maximumFractionDigits:0});
 const val=id=>{const x=parseFloat($(id)?.value);return Number.isFinite(x)?x:0};
 const money=x=>(x<0?"-$":"$")+nf.format(Math.abs(x));
 const pct=x=>(x>=0?"+":"")+x.toFixed(2)+"%";
+const cls=x=>Number(x)>=0?"good":"bad";
 
 function tick(p){
  if(p<10)return .01;
@@ -325,14 +326,26 @@ function renderHistory(){
 function escapeHtml(s){return String(s).replace(/[&<>"']/g,m=>({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;","'":"&#039;"}[m]))}
 
 window.loadRecord=id=>{
- const x=getRecords().find(r=>r.id===id);if(!x)return;
+ const x=getRecords().find(r=>String(r.id)===String(id));if(!x)return;
  $("symbol").value=x.symbol||"";$("buy").value=x.buy;$("sell").value=x.sell;$("shares").value=x.shares;
  $("lots").value=(x.shares/1000).toFixed(3).replace(/\.?0+$/,"");
  $("tradeDate").value=x.tradeDate||"";$("notes").value=x.notes||"";
  document.querySelector('[data-page="calculator"]').click();calc();
 }
-window.deleteRecord=id=>{
- const a=getRecords().filter(r=>r.id!==id);localStorage.setItem("daytradeRecords",JSON.stringify(a));renderHistory();
+window.deleteRecord=async id=>{
+ if(!confirm("確定刪除這筆交易？若已連接 Google Sheet，也會同步刪除雲端資料。"))return;
+ const a=getRecords().filter(r=>String(r.id)!==String(id));
+ saveRecords(a);
+ renderHistory();
+ if(getApi()){
+  try{
+   const r=await cloudDelete(id);
+   if(!r.ok)throw new Error(r.error||"雲端刪除失敗");
+   if($("cloudMsg"))$("cloudMsg").textContent="✓ 已刪除本機與 Google Sheet 的交易紀錄";
+  }catch(e){
+   if($("cloudMsg"))$("cloudMsg").textContent="本機已刪除，但 Google Sheet 刪除失敗："+e.message;
+  }
+ }
 }
 
 function getApi(){return (localStorage.getItem("sheetApiUrl")||"").trim()}
@@ -345,6 +358,7 @@ async function apiRequest(action,payload={}){
 }
 async function cloudSave(record){if(!getApi())return {skipped:true};return await apiRequest("append",record)}
 async function cloudList(){return await apiRequest("list",{})}
+async function cloudDelete(id){return await apiRequest("delete",{id:String(id)})}
 
 
 async function refreshFromCloud(show=true){if(!getApi()){setText("cloudState","未設定","mv warn");renderHistory();return}if(show&&$("cloudMsg"))$("cloudMsg").textContent="正在從 Google Sheet 同步…";try{const r=await cloudList();if(!r.ok)throw new Error(r.error||"讀取失敗");const cloud=Array.isArray(r.records)?r.records:[];saveRecords(cloud);setText("cloudState","已同步","mv profit");if(show&&$("cloudMsg"))$("cloudMsg").textContent=`✓ 已同步 ${cloud.length} 筆紀錄`;renderHistory()}catch(e){setText("cloudState","同步失敗","mv loss");if(show&&$("cloudMsg"))$("cloudMsg").textContent="雲端讀取失敗，使用本機快取："+e.message;renderHistory()}}
