@@ -59,7 +59,7 @@ details summary{cursor:pointer;color:var(--muted);font-size:12px;font-weight:750
 </head>
 <body>
 <div class="wrap">
-<header><div><h1>台股當沖損益試算器</h1><div class="sub">台股紅賺綠賠 · 停損停利反推 · 本機＋Google Sheet 雙重紀錄。</div></div><div class="badge">V1.6.2</div></header>
+<header><div><h1>台股當沖損益試算器</h1><div class="sub">台股紅賺綠賠 · 停損停利反推 · Google Sheet 跨裝置同步與績效分析。</div></div><div class="badge">V1.7</div></header>
 
 <div class="tabs">
 <button class="tab active" data-page="calculator">損益試算</button>
@@ -150,22 +150,33 @@ details summary{cursor:pointer;color:var(--muted);font-size:12px;font-weight:750
 
 <main id="records" class="page">
 <section class="card">
- <div class="title">交易紀錄摘要 <small>依你儲存在這台裝置的紀錄</small></div>
- <div class="summary">
-  <div class="sum"><div class="k">總交易筆數</div><div id="sumTrades" class="v">0</div></div>
-  <div class="sum"><div class="k">累計淨損益</div><div id="sumPnL" class="v">—</div></div>
-  <div class="sum"><div class="k">勝率</div><div id="winRate" class="v">—</div></div>
-  <div class="sum"><div class="k">平均每筆損益</div><div id="avgPnL" class="v">—</div></div>
- </div>
- <div class="btnrow"><button id="pullCloud">從 Google Sheet 重新載入</button><button id="pushAllCloud">備份全部本機紀錄到 Sheet</button></div>
- <div id="cloudMsg" class="syncStatus"></div>
+<div class="title">交易績效 <small>Google Sheet 為主要資料來源</small></div>
+<div class="tabs" id="recordFilters" style="grid-template-columns:repeat(4,1fr);margin-bottom:12px">
+<button class="tab active" data-filter="all">全部</button><button class="tab" data-filter="today">今天</button><button class="tab" data-filter="week">本週</button><button class="tab" data-filter="month">本月</button>
+</div>
+<div class="summary">
+<div class="sum"><div class="k">篩選期間淨損益</div><div id="sumPnL" class="v">—</div></div>
+<div class="sum"><div class="k">總交易次數</div><div id="sumTrades" class="v">0</div></div>
+<div class="sum"><div class="k">勝率</div><div id="winRate" class="v">—</div></div>
+<div class="sum"><div class="k">平均每筆損益</div><div id="avgPnL" class="v">—</div></div>
+<div class="sum"><div class="k">平均獲利</div><div id="avgWin" class="v">—</div></div>
+<div class="sum"><div class="k">平均虧損</div><div id="avgLoss" class="v">—</div></div>
+<div class="sum"><div class="k">最大單筆獲利</div><div id="maxWin" class="v">—</div></div>
+<div class="sum"><div class="k">最大單筆虧損</div><div id="maxLossStat" class="v">—</div></div>
+</div>
+<div class="metrics" style="margin-top:12px">
+<div class="metric"><div class="mk">本月損益</div><div id="monthPnL" class="mv">—</div></div>
+<div class="metric"><div class="mk">雲端狀態</div><div id="cloudState" class="mv">尚未同步</div></div>
+</div>
+<div class="btnrow"><button id="refreshCloud">重新整理雲端紀錄</button><button id="pushAllCloud">備份本機紀錄到 Sheet</button></div>
+<div id="cloudMsg" class="syncStatus"></div>
 </section>
 <section class="card">
- <div class="title">我的交易紀錄 <small>可載入、檢討、刪除</small></div>
- <div id="history"></div>
- <div class="btnrow"><button class="danger" id="clearHistory">刪除全部本機紀錄</button><button id="exportRecords">匯出 JSON</button></div>
-</section>
-</main>
+<div class="title">我的交易紀錄 <small id="recordCountLabel">—</small></div>
+<div id="history"></div>
+<div class="btnrow"><button class="danger" id="clearHistory">清除本機快取</button><button id="exportRecords">匯出目前紀錄 JSON</button></div>
+<div class="hint">此頁優先讀取 Google Sheet；離線時使用本機最近一次同步的快取。</div>
+</section></main>
 
 <div class="footer">此工具是交易成本與損益試算工具。實際帳務可能因券商最低手續費、元以下進位方式或成交條件不同而略有差異。</div>
 </div>
@@ -292,33 +303,20 @@ function recordData(){
 function getRecords(){
  try{return JSON.parse(localStorage.getItem("daytradeRecords")||"[]")}catch(e){return[]}
 }
+function parseTradeDate(r){const raw=String(r.tradeDate||"");if(raw){const d=new Date(raw+"T12:00:00");if(!isNaN(d))return d}const d=new Date(r.savedAt||Date.now());return isNaN(d)?new Date():d}
+function filterRecords(all,f){const n=new Date(),t=new Date(n);t.setHours(0,0,0,0);const tm=new Date(t);tm.setDate(tm.getDate()+1);const w=new Date(t);w.setDate(w.getDate()-((w.getDay()+6)%7));const m=new Date(n.getFullYear(),n.getMonth(),1);return all.filter(r=>{const d=parseTradeDate(r);if(f==="today")return d>=t&&d<tm;if(f==="week")return d>=w;if(f==="month")return d>=m;return true})}
+function stats(rs){const p=rs.map(r=>Number(r.net||0)),w=p.filter(x=>x>0),l=p.filter(x=>x<0),sum=p.reduce((a,b)=>a+b,0);return{n:rs.length,sum,winRate:rs.length?w.length/rs.length*100:0,avg:rs.length?sum/rs.length:0,avgWin:w.length?w.reduce((a,b)=>a+b,0)/w.length:0,avgLoss:l.length?l.reduce((a,b)=>a+b,0)/l.length:0,maxWin:w.length?Math.max(...w):0,maxLoss:l.length?Math.min(...l):0}}
+let activeFilter="all";
 function renderHistory(){
- const a=getRecords();
- $("sumTrades").textContent=a.length;
- const total=a.reduce((s,x)=>s+x.net,0),wins=a.filter(x=>x.net>0).length,avg=a.length?total/a.length:0;
- setText("sumPnL",a.length?money(total):"—","v "+(total>=0?"good":"bad"));
- setText("winRate",a.length?(wins/a.length*100).toFixed(1)+"%":"—","v");
- setText("avgPnL",a.length?money(avg):"—","v "+(avg>=0?"good":"bad"));
-
- if(!a.length){
-  $("history").innerHTML='<div class="hint">目前還沒有交易紀錄。完成一筆交易後，在「損益試算」頁輸入實際買進、賣出價格，再按「儲存這筆交易紀錄」。</div>';
-  return;
- }
- $("history").innerHTML=a.slice().reverse().map(x=>`
- <div class="historyItem">
-  <div class="historyTop">
-   <div>
-    <div class="historyName">${escapeHtml(x.symbol||"未命名交易")}</div>
-    <div class="historyMeta">${x.tradeDate||x.savedAt} · 買 ${nf.format(x.buy)} → 賣 ${nf.format(x.sell)} · ${ni.format(x.shares)} 股</div>
-   </div>
-   <div>
-    <div class="historyPnL ${x.net>=0?"good":"bad"}">${money(x.net)}</div>
-    <div class="historyMeta" style="text-align:right">${pct(x.returnRate)}</div>
-   </div>
-  </div>
-  ${x.notes?`<div class="historyMeta" style="margin-top:9px">📝 ${escapeHtml(x.notes)}</div>`:""}
-  <div class="historyBtns"><button class="mini" onclick="loadRecord(${x.id})">載入</button><button class="mini danger" onclick="deleteRecord(${x.id})">刪除</button></div>
- </div>`).join("");
+ const all=getRecords(),view=filterRecords(all,activeFilter),s=stats(view),month=stats(filterRecords(all,"month"));
+ $("sumTrades").textContent=s.n;
+ setText("sumPnL",s.n?money(s.sum):"—","v "+cls(s.sum));setText("winRate",s.n?s.winRate.toFixed(1)+"%":"—","v");
+ setText("avgPnL",s.n?money(s.avg):"—","v "+cls(s.avg));setText("avgWin",s.avgWin?money(s.avgWin):"—","v profit");
+ setText("avgLoss",s.avgLoss?money(s.avgLoss):"—","v loss");setText("maxWin",s.maxWin?money(s.maxWin):"—","v profit");
+ setText("maxLossStat",s.maxLoss?money(s.maxLoss):"—","v loss");setText("monthPnL",month.n?money(month.sum):"—","mv "+cls(month.sum));
+ if($("recordCountLabel"))$("recordCountLabel").textContent=`顯示 ${view.length} / ${all.length} 筆`;
+ if(!view.length){$("history").innerHTML='<div class="hint">這個期間目前沒有交易紀錄。</div>';return}
+ $("history").innerHTML=view.slice().sort((a,b)=>parseTradeDate(b)-parseTradeDate(a)).map(x=>`<div class="historyItem"><div class="historyTop"><div><div class="historyName">${escapeHtml(x.symbol||"未命名交易")}</div><div class="historyMeta">${escapeHtml(x.tradeDate||x.savedAt)} · 買 ${nf.format(Number(x.buy))} → 賣 ${nf.format(Number(x.sell))} · ${ni.format(Number(x.shares))} 股</div></div><div><div class="historyPnL ${cls(Number(x.net))}">${money(Number(x.net))}</div><div class="historyMeta" style="text-align:right">${pct(Number(x.returnRate||0))}</div></div></div>${x.notes?`<div class="historyMeta" style="margin-top:9px">📝 ${escapeHtml(x.notes)}</div>`:""}<div class="historyBtns"><button class="mini" onclick="loadRecord('${x.id}')">載入</button><button class="mini danger" onclick="deleteRecord('${x.id}')">刪除</button></div></div>`).join("");
 }
 function escapeHtml(s){return String(s).replace(/[&<>"']/g,m=>({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;","'":"&#039;"}[m]))}
 
@@ -344,10 +342,12 @@ async function apiRequest(action,payload={}){
 async function cloudSave(record){if(!getApi())return {skipped:true};return await apiRequest("append",record)}
 async function cloudList(){return await apiRequest("list",{})}
 
+
+async function refreshFromCloud(show=true){if(!getApi()){setText("cloudState","未設定","mv warn");renderHistory();return}if(show&&$("cloudMsg"))$("cloudMsg").textContent="正在從 Google Sheet 同步…";try{const r=await cloudList();if(!r.ok)throw new Error(r.error||"讀取失敗");const cloud=Array.isArray(r.records)?r.records:[];saveRecords(cloud);setText("cloudState","已同步","mv profit");if(show&&$("cloudMsg"))$("cloudMsg").textContent=`✓ 已同步 ${cloud.length} 筆紀錄`;renderHistory()}catch(e){setText("cloudState","同步失敗","mv loss");if(show&&$("cloudMsg"))$("cloudMsg").textContent="雲端讀取失敗，使用本機快取："+e.message;renderHistory()}}
 document.querySelectorAll(".tab").forEach(t=>t.onclick=()=>{
  document.querySelectorAll(".tab,.page").forEach(x=>x.classList.remove("active"));
  t.classList.add("active");$(t.dataset.page).classList.add("active");
- if(t.dataset.page==="records")renderHistory();
+ if(t.dataset.page==="records")refreshFromCloud(true);
 });
 $("lots").addEventListener("input",syncLots);
 $("shares").addEventListener("input",syncShares);
@@ -355,6 +355,8 @@ document.querySelectorAll("input,textarea").forEach(el=>{
  if(!["lots","shares"].includes(el.id))el.addEventListener("input",calc);
  el.addEventListener("change",calc);
 });
+document.querySelectorAll("#recordFilters .tab").forEach(t=>t.onclick=()=>{document.querySelectorAll("#recordFilters .tab").forEach(x=>x.classList.remove("active"));t.classList.add("active");activeFilter=t.dataset.filter;renderHistory()});
+if($("refreshCloud"))$("refreshCloud").onclick=()=>refreshFromCloud(true);
 $("saveRecord").onclick=async()=>{
  const r=recordData();
  if(!(r.buy>0&&r.sell>0&&r.shares>0)){alert("請先輸入完整的買進、賣出價格與股數。");return}
