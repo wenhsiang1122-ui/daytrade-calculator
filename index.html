@@ -1,0 +1,362 @@
+<!doctype html>
+<html lang="zh-Hant">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
+<meta name="theme-color" content="#090d15">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+<meta name="apple-mobile-web-app-title" content="當沖試算">
+<link rel="manifest" href="manifest.webmanifest">
+<link rel="icon" href="icon.svg" type="image/svg+xml">
+<title>台股當沖損益試算器</title>
+<style>
+:root{
+ --bg:#080c13;--panel:#101722;--panel2:#151e2c;--input:#0b111b;--text:#f5f7fb;
+ --muted:#8d9aab;--line:#253043;--accent:#7ea7ff;--good:#3bd791;--bad:#ff6f7d;
+ --warn:#ffd16a;--shadow:0 18px 48px rgba(0,0,0,.26);
+}
+*{box-sizing:border-box}html{background:var(--bg)}
+body{margin:0;background:radial-gradient(circle at 10% -8%,rgba(80,117,255,.17),transparent 30%),var(--bg);
+color:var(--text);font-family:-apple-system,BlinkMacSystemFont,"Segoe UI","Noto Sans TC","PingFang TC","Microsoft JhengHei",sans-serif}
+.wrap{max-width:760px;margin:auto;padding:18px 12px 46px}
+header{display:flex;justify-content:space-between;gap:12px;align-items:flex-start;margin:5px 2px 17px}
+h1{font-size:24px;margin:0 0 6px;font-weight:880;letter-spacing:-.5px}.sub{color:var(--muted);font-size:12px;line-height:1.55}
+.badge{font-size:10px;color:var(--muted);border:1px solid var(--line);border-radius:999px;padding:6px 8px}
+.tabs{display:grid;grid-template-columns:1fr 1fr;gap:6px;background:#0d131d;border:1px solid var(--line);padding:5px;border-radius:15px;margin-bottom:13px}
+.tab{border:0;background:transparent;color:var(--muted);padding:10px 6px;border-radius:11px;font-size:13px;font-weight:800}
+.tab.active{background:var(--panel2);color:var(--text)}
+.page{display:none}.page.active{display:block}
+.card{background:linear-gradient(180deg,rgba(255,255,255,.025),transparent),var(--panel);border:1px solid var(--line);border-radius:19px;padding:16px;box-shadow:var(--shadow);margin-bottom:12px}
+.title{font-size:14px;font-weight:820;margin-bottom:12px;display:flex;justify-content:space-between;gap:10px}.title small{color:var(--muted);font-size:10px;font-weight:600}
+.grid{display:grid;grid-template-columns:1fr 1fr;gap:10px}
+label{display:block;font-size:11px;color:var(--muted);margin:0 0 6px 2px}
+input,select,textarea{width:100%;border:1px solid var(--line);background:var(--input);color:var(--text);border-radius:12px;padding:12px 11px;font-size:17px;font-weight:720;outline:none}
+textarea{font-size:13px;font-weight:500;min-height:74px;resize:vertical}
+input:focus,select:focus,textarea:focus{border-color:var(--accent);box-shadow:0 0 0 3px rgba(126,167,255,.1)}
+.unitbox{position:relative}.unitbox input{padding-right:44px}.unit{position:absolute;right:11px;top:37px;color:var(--muted);font-size:11px}
+.hero{padding:19px 17px}.heroLabel{font-size:11px;color:var(--muted)}.heroValue{font-size:39px;font-weight:900;letter-spacing:-1.4px;margin:3px 0 9px}
+.good{color:var(--good)}.bad{color:var(--bad)}.warn{color:var(--warn)}
+.pills{display:flex;flex-wrap:wrap;gap:7px}.pill{font-size:11px;color:var(--muted);border:1px solid var(--line);border-radius:999px;padding:6px 8px;background:rgba(255,255,255,.02)}
+.metrics{display:grid;grid-template-columns:1fr 1fr;gap:1px;background:var(--line);border-radius:13px;overflow:hidden}
+.metric{background:var(--panel2);padding:13px}.mk{font-size:10px;color:var(--muted);margin-bottom:5px}.mv{font-size:16px;font-weight:820}
+.row{display:flex;justify-content:space-between;gap:15px;padding:9px 0;border-bottom:1px solid rgba(255,255,255,.055);font-size:12px}.row:last-child{border-bottom:0}.row span:first-child{color:var(--muted)}
+.hint{font-size:10px;color:var(--muted);line-height:1.55;margin-top:9px}
+.btnrow{display:grid;grid-template-columns:1fr 1fr;gap:9px;margin-top:11px}
+button{border:1px solid var(--line);background:#172133;color:var(--text);border-radius:12px;padding:11px;font-size:13px;font-weight:800;cursor:pointer}
+button.primary{background:var(--accent);border-color:transparent;color:#07101c}
+button.danger{color:var(--bad)}
+.historyItem{border:1px solid var(--line);border-radius:14px;padding:13px;margin-top:9px;background:var(--panel2)}
+.historyTop{display:flex;justify-content:space-between;gap:10px;align-items:flex-start}.historyName{font-weight:850;font-size:14px}.historyMeta{font-size:10px;color:var(--muted);margin-top:4px;line-height:1.5}
+.historyPnL{font-size:18px;font-weight:900;text-align:right}.historyBtns{display:flex;gap:6px;margin-top:9px}.mini{font-size:10px;padding:7px 8px}
+.summary{display:grid;grid-template-columns:repeat(2,1fr);gap:1px;background:var(--line);border-radius:13px;overflow:hidden;margin-bottom:12px}
+.sum{background:var(--panel2);padding:13px}.sum .k{font-size:10px;color:var(--muted);margin-bottom:5px}.sum .v{font-size:17px;font-weight:850}
+details summary{cursor:pointer;color:var(--muted);font-size:12px;font-weight:750}
+.footer{text-align:center;color:var(--muted);font-size:9px;line-height:1.6;padding:8px 15px}
+@media(max-width:560px){.wrap{padding:15px 10px 40px}.grid{grid-template-columns:1fr 1fr}h1{font-size:22px}.heroValue{font-size:35px}.badge{display:none}}
+</style>
+</head>
+<body>
+<div class="wrap">
+<header><div><h1>台股當沖損益試算器</h1><div class="sub">淨損益、最大虧損停損價、目標獲利停利價，以及自己的交易紀錄。</div></div><div class="badge">V1.5</div></header>
+
+<div class="tabs">
+<button class="tab active" data-page="calculator">損益試算</button>
+<button class="tab" data-page="records">交易紀錄</button>
+</div>
+
+<main id="calculator" class="page active">
+<section class="card">
+ <div class="title">交易輸入 <small>輸入成交或預計成交價格</small></div>
+ <div class="grid">
+  <div><label>股票代號 / 名稱</label><input id="symbol" placeholder="例如 2330 台積電"></div>
+  <div class="unitbox"><label>買進價格</label><input id="buy" inputmode="decimal" type="number" step="any" value="1000"><span class="unit">元</span></div>
+  <div class="unitbox"><label>賣出 / 預計賣出價格</label><input id="sell" inputmode="decimal" type="number" step="any" value="1050"><span class="unit">元</span></div>
+  <div class="unitbox"><label>張數</label><input id="lots" inputmode="decimal" type="number" step=".001" value="1"><span class="unit">張</span></div>
+  <div class="unitbox"><label>股數</label><input id="shares" inputmode="numeric" type="number" step="1" value="1000"><span class="unit">股</span></div>
+  <div><label>交易日期</label><input id="tradeDate" type="date"></div>
+ </div>
+</section>
+
+<section class="card hero">
+ <div class="heroLabel">預估 / 實際淨損益</div>
+ <div id="netProfit" class="heroValue good">—</div>
+ <div class="pills"><span id="returnRate" class="pill">—</span><span id="priceMove" class="pill">—</span><span id="perShare" class="pill">—</span></div>
+</section>
+
+<section class="card">
+ <div class="title">停損 / 停利試算 <small>直接反推你該賣在哪裡</small></div>
+ <div class="grid">
+  <div class="unitbox"><label>最大可承受虧損</label><input id="maxLoss" inputmode="decimal" type="number" step="any" value="30000"><span class="unit">元</span></div>
+  <div class="unitbox"><label>目標淨利</label><input id="targetProfit" inputmode="decimal" type="number" step="any" value="30000"><span class="unit">元</span></div>
+  <div class="unitbox"><label>自行設定停損價</label><input id="manualStop" inputmode="decimal" type="number" step="any" placeholder="例如 980"><span class="unit">元</span></div>
+  <div class="unitbox"><label>自行設定停利價</label><input id="manualTarget" inputmode="decimal" type="number" step="any" placeholder="例如 1035"><span class="unit">元</span></div>
+ </div>
+ <div class="metrics" style="margin-top:11px">
+  <div class="metric"><div class="mk">最大虧損反推停損價</div><div id="autoStop" class="mv bad">—</div></div>
+  <div class="metric"><div class="mk">目標淨利反推停利價</div><div id="autoTarget" class="mv good">—</div></div>
+  <div class="metric"><div class="mk">自行停損 → 實際淨損益</div><div id="manualStopPnL" class="mv">—</div></div>
+  <div class="metric"><div class="mk">自行停利 → 實際淨損益</div><div id="manualTargetPnL" class="mv">—</div></div>
+  <div class="metric"><div class="mk">損益兩平價</div><div id="breakEven" class="mv">—</div></div>
+  <div class="metric"><div class="mk">每跳一檔損益變化</div><div id="tickPnL" class="mv">—</div></div>
+ </div>
+ <div class="hint">「最大虧損反推停損價」會把買進、賣出手續費與當沖交易稅一起算進去。例如最大虧損填 30,000 元，系統會反推出在目前股數下，賣到哪個價位時淨損約為 30,000 元。</div>
+</section>
+
+<section class="card">
+ <div class="title">成本明細</div>
+ <div class="row"><span>買進成交金額</span><strong id="buyAmount">—</strong></div>
+ <div class="row"><span>賣出成交金額</span><strong id="sellAmount">—</strong></div>
+ <div class="row"><span>毛損益</span><strong id="gross">—</strong></div>
+ <div class="row"><span>買進手續費</span><strong id="buyFee">—</strong></div>
+ <div class="row"><span>賣出手續費</span><strong id="sellFee">—</strong></div>
+ <div class="row"><span>當沖交易稅</span><strong id="tax">—</strong></div>
+ <div class="row"><span>總交易成本</span><strong id="cost">—</strong></div>
+</section>
+
+<section class="card">
+ <div class="title">交易備註 <small>存紀錄時一起保存</small></div>
+ <textarea id="notes" placeholder="例如：突破前高進場、追價、停損執行狀況、當下情緒、檢討重點……"></textarea>
+ <div class="btnrow"><button id="clearInputs">清空備註</button><button class="primary" id="saveRecord">儲存這筆交易紀錄</button></div>
+</section>
+
+<section class="card">
+ <details>
+  <summary>⚙️ 費率設定</summary>
+  <div class="grid" style="margin-top:11px">
+   <div><label>牌告手續費率</label><input id="feeRate" type="number" step="any" value="0.001425"></div>
+   <div><label>手續費折數</label><input id="discount" type="number" step="any" value="0.28"></div>
+   <div><label>當沖交易稅率</label><input id="taxRate" type="number" step="any" value="0.0015"></div>
+   <div><label>單邊最低手續費</label><input id="minFee" type="number" step="any" value="0"></div>
+  </div>
+  <div class="btnrow"><button id="resetSettings">恢復預設</button><button class="primary" id="saveSettings">儲存費率</button></div>
+  <div class="hint">預設使用你提供的 0.1425% × 2.8 折，以及現股當沖賣出稅率 0.15%。最低手續費預設 0，可依自己的券商方案調整。</div>
+ </details>
+</section>
+</main>
+
+<main id="records" class="page">
+<section class="card">
+ <div class="title">交易紀錄摘要 <small>依你儲存在這台裝置的紀錄</small></div>
+ <div class="summary">
+  <div class="sum"><div class="k">總交易筆數</div><div id="sumTrades" class="v">0</div></div>
+  <div class="sum"><div class="k">累計淨損益</div><div id="sumPnL" class="v">—</div></div>
+  <div class="sum"><div class="k">勝率</div><div id="winRate" class="v">—</div></div>
+  <div class="sum"><div class="k">平均每筆損益</div><div id="avgPnL" class="v">—</div></div>
+ </div>
+</section>
+<section class="card">
+ <div class="title">我的交易紀錄 <small>可載入、檢討、刪除</small></div>
+ <div id="history"></div>
+ <div class="btnrow"><button class="danger" id="clearHistory">刪除全部紀錄</button><button id="exportRecords">匯出 JSON</button></div>
+</section>
+</main>
+
+<div class="footer">此工具是交易成本與損益試算工具。實際帳務可能因券商最低手續費、元以下進位方式或成交條件不同而略有差異。</div>
+</div>
+
+<script>
+(()=>{
+const $=id=>document.getElementById(id);
+const nf=new Intl.NumberFormat("zh-TW",{minimumFractionDigits:2,maximumFractionDigits:2});
+const ni=new Intl.NumberFormat("zh-TW",{maximumFractionDigits:0});
+const val=id=>{const x=parseFloat($(id)?.value);return Number.isFinite(x)?x:0};
+const money=x=>(x<0?"-$":"$")+nf.format(Math.abs(x));
+const pct=x=>(x>=0?"+":"")+x.toFixed(2)+"%";
+
+function tick(p){
+ if(p<10)return .01;
+ if(p<50)return .05;
+ if(p<100)return .1;
+ if(p<500)return .5;
+ if(p<1000)return 1;
+ return 5;
+}
+function roundUpTick(p){
+ if(!(p>0))return p;
+ let x=p;
+ for(let i=0;i<5;i++){const t=tick(x);x=Math.ceil((x-1e-10)/t)*t}
+ return +x.toFixed(4);
+}
+function roundDownTick(p){
+ if(!(p>0))return p;
+ let x=p;
+ for(let i=0;i<5;i++){const t=tick(x);x=Math.floor((x+1e-10)/t)*t}
+ return +x.toFixed(4);
+}
+function fee(price,shares){
+ const raw=price*shares*val("feeRate")*val("discount");
+ const minimum=val("minFee");
+ return raw>0?Math.max(raw,minimum):0;
+}
+function resultAt(sellPrice,sharesOverride){
+ const buy=val("buy"),shares=sharesOverride??Math.floor(val("shares"));
+ if(!(buy>0&&sellPrice>0&&shares>0))return null;
+ const buyAmount=buy*shares,sellAmount=sellPrice*shares;
+ const buyFee=fee(buy,shares),sellFee=fee(sellPrice,shares),tax=sellAmount*val("taxRate");
+ const gross=sellAmount-buyAmount,net=gross-buyFee-sellFee-tax;
+ return {buyAmount,sellAmount,buyFee,sellFee,tax,gross,net,cost:buyFee+sellFee+tax};
+}
+function solveSellForNet(target,sharesOverride){
+ const buy=val("buy"),shares=sharesOverride??Math.floor(val("shares"));
+ if(!(buy>0&&shares>0))return NaN;
+ let lo=.001,hi=Math.max(buy*3,buy+10000);
+ while(resultAt(hi,shares)&&resultAt(hi,shares).net<target&&hi<10000000)hi*=2;
+ for(let i=0;i<100;i++){
+  const mid=(lo+hi)/2,r=resultAt(mid,shares);
+  if(!r||r.net<target)lo=mid;else hi=mid;
+ }
+ return hi;
+}
+function syncLots(){
+ $("shares").value=Math.max(0,Math.round(val("lots")*1000));calc();
+}
+function syncShares(){
+ $("lots").value=(Math.max(0,val("shares"))/1000).toFixed(3).replace(/\.?0+$/,"");calc();
+}
+function setText(id,text,cls){$(id).textContent=text;if(cls)$(id).className=cls}
+
+function calc(){
+ const buy=val("buy"),sell=val("sell"),shares=Math.floor(val("shares"));
+ if(!(buy>0&&shares>0))return;
+ const r=resultAt(sell);
+ if(r){
+  setText("netProfit",money(r.net),"heroValue "+(r.net>=0?"good":"bad"));
+  $("returnRate").textContent="淨報酬率 "+pct(r.net/r.buyAmount*100);
+  $("priceMove").textContent="價差 "+pct((sell-buy)/buy*100);
+  $("perShare").textContent="每股淨利 "+(r.net/shares>=0?"+":"")+nf.format(r.net/shares);
+  $("buyAmount").textContent=money(r.buyAmount);
+  $("sellAmount").textContent=money(r.sellAmount);
+  $("gross").textContent=money(r.gross);
+  $("buyFee").textContent=money(r.buyFee);
+  $("sellFee").textContent=money(r.sellFee);
+  $("tax").textContent=money(r.tax);
+  $("cost").textContent=money(r.cost);
+ }
+
+ const maxLoss=Math.abs(val("maxLoss"));
+ const theoreticalStop=solveSellForNet(-maxLoss,shares);
+ // To avoid exceeding the requested loss, round UP to the next legal sell tick.
+ const safeStop=roundUpTick(theoreticalStop);
+ const stopResult=resultAt(safeStop,shares);
+ setText("autoStop",
+   Number.isFinite(safeStop)?`${nf.format(safeStop)} 元 (${money(stopResult.net)})`:"—",
+   "mv bad");
+
+ const targetProfit=Math.abs(val("targetProfit"));
+ const theoreticalTarget=solveSellForNet(targetProfit,shares);
+ const safeTarget=roundUpTick(theoreticalTarget);
+ const targetResult=resultAt(safeTarget,shares);
+ setText("autoTarget",
+   Number.isFinite(safeTarget)?`${nf.format(safeTarget)} 元 (${money(targetResult.net)})`:"—",
+   "mv good");
+
+ const ms=val("manualStop"),mt=val("manualTarget");
+ const msr=ms>0?resultAt(ms,shares):null,mtr=mt>0?resultAt(mt,shares):null;
+ setText("manualStopPnL",msr?money(msr.net):"—","mv "+(msr?(msr.net>=0?"good":"bad"):""));
+ setText("manualTargetPnL",mtr?money(mtr.net):"—","mv "+(mtr?(mtr.net>=0?"good":"bad"):""));
+
+ const be=roundUpTick(solveSellForNet(0,shares));
+ setText("breakEven",`${nf.format(be)} 元`,"mv");
+ setText("tickPnL",money(tick(buy)*shares),"mv");
+}
+function recordData(){
+ const r=resultAt(val("sell"));
+ return {
+  id:Date.now(),
+  savedAt:new Date().toLocaleString("zh-TW"),
+  tradeDate:$("tradeDate").value,
+  symbol:$("symbol").value.trim(),
+  buy:val("buy"),sell:val("sell"),shares:Math.floor(val("shares")),
+  lots:val("shares")/1000,
+  gross:r?.gross??0,buyFee:r?.buyFee??0,sellFee:r?.sellFee??0,tax:r?.tax??0,
+  net:r?.net??0,returnRate:r?r.net/r.buyAmount*100:0,
+  notes:$("notes").value.trim()
+ };
+}
+function getRecords(){
+ try{return JSON.parse(localStorage.getItem("daytradeRecords")||"[]")}catch(e){return[]}
+}
+function renderHistory(){
+ const a=getRecords();
+ $("sumTrades").textContent=a.length;
+ const total=a.reduce((s,x)=>s+x.net,0),wins=a.filter(x=>x.net>0).length,avg=a.length?total/a.length:0;
+ setText("sumPnL",a.length?money(total):"—","v "+(total>=0?"good":"bad"));
+ setText("winRate",a.length?(wins/a.length*100).toFixed(1)+"%":"—","v");
+ setText("avgPnL",a.length?money(avg):"—","v "+(avg>=0?"good":"bad"));
+
+ if(!a.length){
+  $("history").innerHTML='<div class="hint">目前還沒有交易紀錄。完成一筆交易後，在「損益試算」頁輸入實際買進、賣出價格，再按「儲存這筆交易紀錄」。</div>';
+  return;
+ }
+ $("history").innerHTML=a.slice().reverse().map(x=>`
+ <div class="historyItem">
+  <div class="historyTop">
+   <div>
+    <div class="historyName">${escapeHtml(x.symbol||"未命名交易")}</div>
+    <div class="historyMeta">${x.tradeDate||x.savedAt} · 買 ${nf.format(x.buy)} → 賣 ${nf.format(x.sell)} · ${ni.format(x.shares)} 股</div>
+   </div>
+   <div>
+    <div class="historyPnL ${x.net>=0?"good":"bad"}">${money(x.net)}</div>
+    <div class="historyMeta" style="text-align:right">${pct(x.returnRate)}</div>
+   </div>
+  </div>
+  ${x.notes?`<div class="historyMeta" style="margin-top:9px">📝 ${escapeHtml(x.notes)}</div>`:""}
+  <div class="historyBtns"><button class="mini" onclick="loadRecord(${x.id})">載入</button><button class="mini danger" onclick="deleteRecord(${x.id})">刪除</button></div>
+ </div>`).join("");
+}
+function escapeHtml(s){return String(s).replace(/[&<>"']/g,m=>({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;","'":"&#039;"}[m]))}
+
+window.loadRecord=id=>{
+ const x=getRecords().find(r=>r.id===id);if(!x)return;
+ $("symbol").value=x.symbol||"";$("buy").value=x.buy;$("sell").value=x.sell;$("shares").value=x.shares;
+ $("lots").value=(x.shares/1000).toFixed(3).replace(/\.?0+$/,"");
+ $("tradeDate").value=x.tradeDate||"";$("notes").value=x.notes||"";
+ document.querySelector('[data-page="calculator"]').click();calc();
+}
+window.deleteRecord=id=>{
+ const a=getRecords().filter(r=>r.id!==id);localStorage.setItem("daytradeRecords",JSON.stringify(a));renderHistory();
+}
+
+document.querySelectorAll(".tab").forEach(t=>t.onclick=()=>{
+ document.querySelectorAll(".tab,.page").forEach(x=>x.classList.remove("active"));
+ t.classList.add("active");$(t.dataset.page).classList.add("active");
+ if(t.dataset.page==="records")renderHistory();
+});
+$("lots").addEventListener("input",syncLots);
+$("shares").addEventListener("input",syncShares);
+document.querySelectorAll("input,textarea").forEach(el=>{
+ if(!["lots","shares"].includes(el.id))el.addEventListener("input",calc);
+ el.addEventListener("change",calc);
+});
+$("saveRecord").onclick=()=>{
+ const r=recordData();
+ if(!(r.buy>0&&r.sell>0&&r.shares>0)){alert("請先輸入完整的買進、賣出價格與股數。");return}
+ const a=getRecords();a.push(r);localStorage.setItem("daytradeRecords",JSON.stringify(a.slice(-500)));
+ $("saveRecord").textContent="✓ 已儲存";setTimeout(()=>$("saveRecord").textContent="儲存這筆交易紀錄",1100);renderHistory();
+};
+$("clearInputs").onclick=()=>{$("notes").value="";$("symbol").value="";calc()};
+$("clearHistory").onclick=()=>{if(confirm("確定要刪除全部交易紀錄嗎？此動作無法復原。")){localStorage.removeItem("daytradeRecords");renderHistory()}};
+$("exportRecords").onclick=()=>{
+ const data=JSON.stringify(getRecords(),null,2),blob=new Blob([data],{type:"application/json"});
+ const url=URL.createObjectURL(blob),a=document.createElement("a");a.href=url;a.download="當沖交易紀錄.json";a.click();setTimeout(()=>URL.revokeObjectURL(url),1000);
+};
+$("saveSettings").onclick=()=>{
+ const x={feeRate:val("feeRate"),discount:val("discount"),taxRate:val("taxRate"),minFee:val("minFee")};
+ localStorage.setItem("daytradeFeeSettings",JSON.stringify(x));calc();
+};
+$("resetSettings").onclick=()=>{
+ $("feeRate").value=.001425;$("discount").value=.28;$("taxRate").value=.0015;$("minFee").value=0;
+ localStorage.removeItem("daytradeFeeSettings");calc();
+};
+try{
+ const x=JSON.parse(localStorage.getItem("daytradeFeeSettings")||"null");
+ if(x)Object.keys(x).forEach(k=>{if($(k))$(k).value=x[k]});
+}catch(e){}
+$("tradeDate").value=new Date().toISOString().slice(0,10);
+if("serviceWorker"in navigator&&location.protocol.startsWith("http"))navigator.serviceWorker.register("./sw.js").catch(()=>{});
+calc();renderHistory();
+})();
+</script>
+</body>
+</html>
