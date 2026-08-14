@@ -42,7 +42,7 @@ input:focus,select:focus,textarea:focus{border-color:var(--accent);box-shadow:0 
 .metrics{display:grid;grid-template-columns:1fr 1fr;gap:1px;background:var(--line);border-radius:13px;overflow:hidden}
 .metric{background:var(--panel2);padding:13px}.mk{font-size:10px;color:var(--muted);margin-bottom:5px}.mv{font-size:16px;font-weight:820}
 .row{display:flex;justify-content:space-between;gap:15px;padding:9px 0;border-bottom:1px solid rgba(255,255,255,.055);font-size:12px}.row:last-child{border-bottom:0}.row span:first-child{color:var(--muted)}
-.hint{font-size:10px;color:var(--muted);line-height:1.55;margin-top:9px}
+.hint{font-size:10px;color:var(--muted);line-height:1.55;margin-top:9px}.lookup-ok{color:var(--good)}.lookup-warn{color:var(--warn)}
 .btnrow{display:grid;grid-template-columns:1fr 1fr;gap:9px;margin-top:11px}
 button{border:1px solid var(--line);background:#172133;color:var(--text);border-radius:12px;padding:11px;font-size:13px;font-weight:800;cursor:pointer}
 button.primary{background:var(--accent);border-color:transparent;color:#07101c}
@@ -59,7 +59,7 @@ details summary{cursor:pointer;color:var(--muted);font-size:12px;font-weight:750
 </head>
 <body>
 <div class="wrap">
-<header><div><h1>台股當沖損益試算器</h1><div class="sub">台股紅賺綠賠 · 停損停利反推 · Google Sheet 跨裝置同步與績效分析。</div></div><div class="badge">V1.7.4</div></header>
+<header><div><h1>台股當沖損益試算器</h1><div class="sub">台股紅賺綠賠 · 停損停利反推 · Google Sheet 跨裝置同步與績效分析。</div></div><div class="badge">V1.8</div></header>
 
 <div class="tabs">
 <button class="tab active" data-page="calculator">損益試算</button>
@@ -70,7 +70,7 @@ details summary{cursor:pointer;color:var(--muted);font-size:12px;font-weight:750
 <section class="card">
  <div class="title">交易輸入 <small>輸入成交或預計成交價格</small></div>
  <div class="grid">
-  <div><label>股票代號 / 名稱</label><input id="symbol" placeholder="例如 2330 台積電"></div>
+  <div><label>股票代號 / 名稱</label><input id="symbol" autocomplete="off" placeholder="輸入代號，例如 2330"><div id="stockLookupStatus" class="hint" style="margin:6px 2px 0"></div></div>
   <div class="unitbox"><label>買進價格</label><input id="buy" inputmode="decimal" type="number" step="any" value="1000"><span class="unit">元</span></div>
   <div class="unitbox"><label>賣出 / 預計賣出價格</label><input id="sell" inputmode="decimal" type="number" step="any" value="1050"><span class="unit">元</span></div>
   <div class="unitbox"><label>張數</label><input id="lots" inputmode="decimal" type="number" step=".001" value="1"><span class="unit">張</span></div>
@@ -173,6 +173,10 @@ details summary{cursor:pointer;color:var(--muted);font-size:12px;font-weight:750
 </section>
 <section class="card">
 <div class="title">我的交易紀錄 <small id="recordCountLabel">—</small></div>
+<div class="grid" style="grid-template-columns:1fr auto;align-items:end;margin-bottom:10px">
+<div><label>搜尋股票代號 / 名稱</label><input id="recordSearch" type="search" placeholder="例如 2330、台積電"></div>
+<button id="clearRecordSearch" style="height:45px;padding:0 16px">清除</button>
+</div>
 <div id="history"></div>
 <div class="btnrow"><button class="danger" id="clearHistory">清除本機快取</button><button id="exportRecords">匯出目前紀錄 JSON</button></div>
 <div class="hint">此頁優先讀取 Google Sheet；離線時使用本機最近一次同步的快取。</div>
@@ -378,7 +382,14 @@ function filterRecords(all,f){
 function stats(rs){const p=rs.map(r=>Number(r.net||0)),w=p.filter(x=>x>0),l=p.filter(x=>x<0),sum=p.reduce((a,b)=>a+b,0);return{n:rs.length,sum,winRate:rs.length?w.length/rs.length*100:0,avg:rs.length?sum/rs.length:0,avgWin:w.length?w.reduce((a,b)=>a+b,0)/w.length:0,avgLoss:l.length?l.reduce((a,b)=>a+b,0)/l.length:0,maxWin:w.length?Math.max(...w):0,maxLoss:l.length?Math.min(...l):0}}
 let activeFilter="all";
 function renderHistory(){
- const all=getRecords(),view=filterRecords(all,activeFilter),s=stats(view),month=stats(filterRecords(all,"month"));
+ const all=getRecords();
+ const periodView=filterRecords(all,activeFilter);
+ const q=($("recordSearch")?.value||"").trim().toLowerCase();
+ const view=q?periodView.filter(r=>String(r.symbol||"").toLowerCase().includes(q)):periodView;
+ const s=stats(view);
+ const monthBase=filterRecords(all,"month");
+ const monthView=q?monthBase.filter(r=>String(r.symbol||"").toLowerCase().includes(q)):monthBase;
+ const month=stats(monthView);
  $("sumTrades").textContent=s.n;
  setText("sumPnL",s.n?money(s.sum):"—","v "+cls(s.sum));setText("winRate",s.n?s.winRate.toFixed(1)+"%":"—","v");
  setText("avgPnL",s.n?money(s.avg):"—","v "+cls(s.avg));setText("avgWin",s.avgWin?money(s.avgWin):"—","v profit");
@@ -423,6 +434,28 @@ async function apiRequest(action,payload={}){
 }
 async function cloudSave(record){if(!getApi())return {skipped:true};return await apiRequest("append",record)}
 async function cloudList(){return await apiRequest("list",{})}
+async function stockLookup(query){return await apiRequest("stockLookup",{query:String(query||"").trim()})}
+let stockLookupTimer=null;
+async function resolveStockCode(){
+ const raw=$("symbol").value.trim();
+ if(!/^\d{4,6}$/.test(raw)){if($("stockLookupStatus"))$("stockLookupStatus").textContent="";return}
+ if(!getApi()){if($("stockLookupStatus")){$("stockLookupStatus").textContent="請先設定 Google Sheet 同步網址";$("stockLookupStatus").className="hint lookup-warn"};return}
+ $("stockLookupStatus").textContent="正在查詢公司名稱…";
+ try{
+  const r=await stockLookup(raw);
+  if(r.ok&&r.stock){
+   $("symbol").value=`${r.stock.code} ${r.stock.name}`;
+   $("stockLookupStatus").textContent=`✓ 已辨識：${r.stock.code} ${r.stock.name}`;
+   $("stockLookupStatus").className="hint lookup-ok";
+  }else{
+   $("stockLookupStatus").textContent="找不到這個股票代號";
+   $("stockLookupStatus").className="hint lookup-warn";
+  }
+ }catch(e){
+  $("stockLookupStatus").textContent="公司名稱查詢失敗："+e.message;
+  $("stockLookupStatus").className="hint lookup-warn";
+ }
+}
 async function cloudDelete(id){return await apiRequest("delete",{id:String(id)})}
 
 
@@ -470,6 +503,12 @@ try{
  const x=JSON.parse(localStorage.getItem("daytradeFeeSettings")||"null");
  if(x)Object.keys(x).forEach(k=>{if($(k))$(k).value=x[k]});
 }catch(e){}
+if($("symbol")){
+ $("symbol").addEventListener("input",()=>{clearTimeout(stockLookupTimer);const raw=$("symbol").value.trim();if(!/^\d{4,6}$/.test(raw)){if($("stockLookupStatus"))$("stockLookupStatus").textContent="";return}stockLookupTimer=setTimeout(resolveStockCode,450)});
+ $("symbol").addEventListener("blur",()=>{clearTimeout(stockLookupTimer);if(/^\d{4,6}$/.test($("symbol").value.trim()))resolveStockCode()});
+}
+if($("recordSearch"))$("recordSearch").addEventListener("input",renderHistory);
+if($("clearRecordSearch"))$("clearRecordSearch").onclick=()=>{$("recordSearch").value="";renderHistory()};
 $("sheetApiUrl").value=getApi();
 $("tradeDate").value=new Date().toISOString().slice(0,10);
 if("serviceWorker"in navigator&&location.protocol.startsWith("http"))navigator.serviceWorker.register("./sw.js").catch(()=>{});

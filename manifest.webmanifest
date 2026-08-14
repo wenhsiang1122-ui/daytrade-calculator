@@ -5,7 +5,7 @@
   "display": "standalone",
   "background_color": "#080c13",
   "theme_color": "#090d15",
-  "description": "台股當沖損益、Google Sheet 跨裝置同步與交易績效分析",
+  "description": "台股當沖損益、股票代碼自動辨識、Google Sheet 跨裝置同步與交易紀錄搜尋工具",
   "icons": [
     {
       "src": "icon-192.png",
